@@ -1,0 +1,30 @@
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+.test-account
+.claude/
+.DS_Store
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Patient and session data written by the Python game
+data_all_layers/
+patients_all_layers/
+sounds/
+
+# Model files and documents are not published (the models are served by Firebase Hosting)
+*.task
+*.docx
+*.pdf
+
+# Web dependencies and build output
+node_modules/
+dist/
+.firebase/
+fruitcatcher-web/public/mediapipe/
+fruitcatcher-web/public/models/
+*.tsbuildinfo

@@ -1,0 +1,50 @@
+rules_version = '2';
+
+// FruitCatcher security rules.
+// - Each clinician can only read and write their own data (users/{uid}/...).
+// - The free trial: users/{uid}.accessUntil (a timestamp). Clinicians cannot change it, or status.
+//   To extend access: Firebase console > Firestore > users > (clinician) > accessUntil.
+//   To block someone: set status to "blocked" (or accessUntil to a past date).
+// - After accessUntil, patient data stays stored but cannot be read or written until access is extended.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function hasAccess(uid) {
+      let p = get(/databases/$(database)/documents/users/$(uid)).data;
+      return p.status != 'blocked' && p.accessUntil > request.time;
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid);
+
+      // sign-up: a trial of at most 31 days, created by the clinician's own app
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['name', 'email', 'phone', 'createdAt', 'accessUntil', 'status', 'settings'])
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.phone is map
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'trial'
+        && request.resource.data.accessUntil is timestamp
+        && request.resource.data.accessUntil <= request.time + duration.value(31, 'd');
+
+      // profile edits: name, phone and settings only
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'phone', 'settings']);
+
+      allow delete: if false;
+
+      // patients and everything under them (sessions, frames, assessments)
+      match /patients/{pid} {
+        allow read, write: if isOwner(uid) && hasAccess(uid);
+        match /{document=**} {
+          allow read, write: if isOwner(uid) && hasAccess(uid);
+        }
+      }
+    }
+  }
+}
